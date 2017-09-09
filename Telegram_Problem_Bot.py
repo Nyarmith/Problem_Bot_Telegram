@@ -48,16 +48,26 @@ class ProblemManager(object):
         self.cur_source = None
         self.problems   = {}  
         self.joined_usrs= {}  #user1 : 'ready', user2 : 'ready', user3 : 'not-ready', etc... (but with True and False)
+        #populate problems
 
     #select pool to draw problems from
     def selectSource(src):
+        if src in self.problems.keys():
+            self.cur_source = src
+            return True
+        else:
+            return False
 
     def sendRandomProblem():
 
     #def sendChapterProblem(source, chapter): # TODO: as part of mode
 
     def addUser(uname):
-        self.joined_usrs[uname.id] = False
+        if uname.id not in self.joined_usrs.keys():
+            self.joined_usrs[uname.id] = False
+            return True
+        else:
+            return False
 
     def rmUser(uname):
         removeKey(self.joined_usrs, uname.id)
@@ -70,6 +80,34 @@ class ProblemManager(object):
     #dispenses the next problem (TODO: based on the dispense-mode)
     def dispense():
         #first fresh problem from random chapter
+        if not this.all_ready():
+            return -1;
+
+
+    def listSources():  #lists current sources, also looks for new ones
+        #check if we haven't seen this source somewhere, so we can avoid overwriting in that scenario(but add the difference)
+        mockobj = {}
+        for dir in get_immediate_subdirectories(CONFIG_SPEC['problem_directory']):
+            if not dir.startswith('.'):
+                for subdir in get_immediate_subdirectories(dir):
+                    chapters = {}
+                    chapters[subdir] = set()
+                    for curfile in os.listdir(dir + '/' + subdir):
+                        chapters[subdir].add(dir+'/'+subdir+'/'+curfile)
+                #compare the chapters object with the current running and completed chapters for the source
+                if dir not in self.problems.keys():
+                    self.problems[dir] = chapters
+                else:
+                    for chap in chapters.keys():
+                        if chap not in self.problems[dir].keys():
+                            self.problems[dir][chap] = chapters[chap] #this is wrong because it doesn't take into account problems_done and problems_not_done
+                            self.problems[dir][chap] = chapters[chap]
+                        else:
+
+
+        #now that reading of the sources is done, let's return the actual sources
+        return self.problems.keys()
+
 
 
     #def setDispenseMode(uname):
@@ -114,7 +152,11 @@ class ProblemBot(object):
 
 #these map to new commands
     def join(self, chat_id, args):
-        return self.chats[chat_id].addUser(args[0])
+        if self.chats[chat_id].addUser(args[0]):
+            bot.sendMessage(chat_id, "User %s Readied"   % args[0].first_name)
+        else:
+            bot.sendMessage(chat_id, "User %s already joined" % args[0].first_name)
+
 
     def leave(self, chat_id, args):
         return self.chats[chat_id].rmUser(args[0])
@@ -131,6 +173,8 @@ class ProblemBot(object):
         newProb = self.chats[chat_id].dispense()  #returns filepath
         if newProb is None:
             bot.sendMessage(chat_id, "All problems in %s complete!" % self.chats[chat_id].cur_source)
+        else if newProb == -1:
+            bot.sendMessage(chat_id, "Users aren't readied!" % self.chats[chat_id].cur_source)
         
         bot.sendPhoto(newProb, open(newProb, 'rb'))
 
@@ -138,18 +182,19 @@ class ProblemBot(object):
         self.chats[chat_id]
 
     def select_source(self, chat_id, args):
-        try:
-            self.chats[chat_id].selectSource(args[1])
+        if self.chats[chat_id].selectSource(args[1]):
             bot.sendMessage(chat_id, "Source Selected!")
-        except:
+        else:
             bot.sendMessage(chat_id, "No Such Source!")
 
 
     def list_sources(self, chat_id, args):
+        src_list = self.chats[chat_id].listSources()
+        bot.sendMessage(chat_id, str(src_list))
 
 
     def start(self, chat_id, args):
-        self.chats[chat_id] = ProblemManager
+        self.chats[chat_id] = ProblemManager()
         
     def help(self, chat_id, args):
         helpstr = "I have no idea, I'm so tired"
