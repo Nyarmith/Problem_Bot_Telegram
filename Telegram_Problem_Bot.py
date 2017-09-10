@@ -1,5 +1,4 @@
-#!/usr/bin/env python
-#sends either txt or png in email to listed users
+#!/usr/bin/python3
 
 import smtplib
 import pickle
@@ -292,7 +291,7 @@ def handle(msg):
     print("got command: {}".format(command))
 
     split_msg = command.split()
-    method    = split_msg[0][1:]
+    method    = split_msg[0].split('@')[0][1:]
     args      = split_msg[1:]
     args.insert(0,fromusr)
 
