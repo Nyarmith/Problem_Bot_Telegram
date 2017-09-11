@@ -8,8 +8,8 @@ import yaml
 import random
 import re
 
-CONFIGFILE   = '/home/reader/Projects/Problem_Notifier_Telegram/config.yml';
-PROBLEM_DAT  = '/home/reader/Projects/Problem_Notifier_Telegram/prob_tracking.yml';
+BASE_WD = ""  #to be populated by working directory of bot
+
 #--good sorting--
 def tryint(s):
     try:
@@ -120,7 +120,7 @@ class ProblemManager(object):
     def readSources(self, wd):
         my_sources = {}
         for source in get_immediate_subdirectories(wd):
-            if not source.startswith('.'):
+            if not source.startswith('.') and not source.startswith('__'):
                 my_sources[source] = {}
                 for chapter in get_immediate_subdirectories(source):
                     #init that chapter in yaml
@@ -137,7 +137,7 @@ class ProblemManager(object):
         #check if we haven't seen this source somewhere, so we can avoid overwriting in that scenario(but add the difference)
         mockobj = {}
         #make copy of new sources
-        newsources = self.readSources('.')
+        newsources = self.readSources(BASE_WD)
 
         for src in newsources.keys():
             if src not in self.problems.keys():
@@ -145,7 +145,7 @@ class ProblemManager(object):
                 self.problems[src] = newsources[src]
             else:
                 #we must now compare them in detail
-                for chapter in newsources[self.cur_source].keys():
+                for chapter in newsources[src].keys():
                     if chapter not in self.problems[src].keys():
                         self.problems[src][chapter] = newsources[src][chapter]
                     else:
@@ -173,13 +173,12 @@ class ProblemManager(object):
         return True
 
 
-BASE_WD = ""  #to be populated
 
 
 #Bot Definition
 class ProblemBot(object):
     def __init__(self):
-        self.save_file='chats/ProblemBot'
+        self.save_file='__chats/ProblemBot'
         if os.path.isfile(self.save_file):
             self.load()
         else:
@@ -241,7 +240,8 @@ class ProblemBot(object):
         self.save()
 
     def restate_problem(self, chat_id, args):
-        bot.sendPhoto(chat_id, open(BASE_WD + '/' +self.chats[chat_id].cur_prob, 'rb'))
+        if self.chats[chat_id].cur_prob != None:
+            bot.sendPhoto(chat_id, open(BASE_WD + '/' +self.chats[chat_id].cur_prob, 'rb'))
 
     def unready(self, chat_id, args):
         if not self.chats[chat_id].isUserInPool(args[0]):
