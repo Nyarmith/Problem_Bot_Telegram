@@ -248,8 +248,9 @@ class ProblemManager(object):
 
 
     def setDueDate(self, chat_id, timeArr):
-        if timeArr[0] == "None":
+        if timeArr[1] == "None":
             self.duedate = None
+            return 0
         elif len(timeArr) == 1:
             return -1
 
@@ -365,6 +366,7 @@ class ProblemBot(object):
             bot.sendMessage(chat_id, "Error : %s is not a valid mode" % mode)
         else:
             bot.sendMessage(chat_id, "Selection mode - %s - set" % mode)
+        self.save()
 
     def set_chapter(self, chat_id, args):
         chapter = args[1]
@@ -377,6 +379,7 @@ class ProblemBot(object):
             bot.sendMessage(chat_id, "Wrong Selection Mode! - current mode : %s" % self.chats[chat_id].selectionMode)
         elif res == 0:
             bot.sendMessage(chat_id, "%s selected!" % chapter)
+        self.save()
 
     def list_chapters(self, chat_id, args):
         res = self.chats[chat_id].listChapters()
@@ -407,6 +410,7 @@ class ProblemBot(object):
         else:
             date_fmtd = self.chats[chat_id].getDueDate()
             bot.sendMessage(chat_id, "Due date set at %s" % date_fmtd)
+        self.save()
 
     def get_due_date(self, chat_id, args):
         duedate = self.chats[chat_id].getDueDate()
