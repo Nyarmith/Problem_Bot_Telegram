@@ -250,11 +250,13 @@ class ProblemManager(object):
     def setDueDate(self, chat_id, timeArr):
         if timeArr[0] == "None":
             self.duedate = None
+        elif len(timeArr) == 1:
+            return -1
 
         incr = 0
         secs = { 'd' : 86400, 'h' : 3600, 'm' : 60 }
         try:
-            for substr in timeArr:
+            for substr in timeArr[1:]:
                 substr.strip()
                 incr += float(substr[0:-1]) * secs[substr[-1]]
         except:
@@ -399,7 +401,7 @@ class ProblemBot(object):
 
 
     def set_due_date(self, chat_id, args):
-        res = self.chats[chat_id].setDueDate(chat_id, args[1:])
+        res = self.chats[chat_id].setDueDate(chat_id, args)
         if ( res == -1 ):
             bot.sendMessage(chat_id, "Due Date Format Incorrect! Use something like: 2d 12h 34m")
         else:
@@ -421,7 +423,7 @@ class ProblemBot(object):
 
         
     def help(self, chat_id, args):
-        helpstr = "A bot for sharpening your problem skills!\nList of Commands:\n/join : joins pool of problem-solving participants. \n/list_sources : show available problem pools\n/select_source : choose a source to draw problems from. \n/give_problem : Dispense a problem from a source. By default this picks the easiest available problem in a random chapter.\n/ready : signals that you have completed the problem and are ready to move on.\n/unready : Unreadies yourself in case you do not want to move on yet.\n/restate_problem : restates current problem\n/leave : leave pool of problem-solving participants."
+        helpstr = "A bot for sharpening your problem skills!\nList of Commands:\n/join : joins pool of problem-solving participants. \n/list_sources : show available problem pools\n/select_source : choose a source to draw problems from. \n/give_problem : Dispense a problem from a source. By default this picks the easiest available problem in a random chapter.\n/ready : signals that you have completed the problem and are ready to move on.\n/unready : Unreadies yourself in case you do not want to move on yet.\n/set_due_date : sets due date in format Xd Yh Zm\n/get_due_date : gets the set due date\n/list_chapters : list chapters in source\n/set_chapter : set the current chapter(only in selection-mode Chapter\n/set_selection_mode : sets the bot's selection mode, current options are 'Chapter' and 'Random'\n/restate_problem : restates current problem\n/leave : leave pool of problem-solving participants."
         bot.sendMessage(chat_id, helpstr)
 
 
@@ -446,10 +448,10 @@ def handle(msg):
     args      = split_msg[1:]
     args.insert(0,fromusr)
 
-    try:
-        getattr(PB, method)(chat_id, args)
-    except:
-        bot.sendMessage(chat_id, "Invalid Command")
+    #try:
+    getattr(PB, method)(chat_id, args)
+    #except:
+        #bot.sendMessage(chat_id, "Invalid Command")
 
 
 
