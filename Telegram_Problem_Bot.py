@@ -1,11 +1,13 @@
 #!/usr/bin/python3
 
 import smtplib
+import time
 import pickle
 import telepot
 import os
 import yaml
 import random
+import datetime
 import re
 
 BASE_WD = ""  #to be populated by working directory of bot
@@ -48,6 +50,8 @@ class ProblemManager(object):
         self.cur_source = None
         self.cur_chap = None
         self.cur_prob = None
+        self.duedate = None
+        self.selectionMode = 'Random'  #can also be 'Chapter'
         self.joined_usrs= {}  #user1 : 'ready', user2 : 'ready', user3 : 'not-ready', etc... (but with True and False)
         #populate problems
 
@@ -83,6 +87,16 @@ class ProblemManager(object):
     def flagUser(self, uname, state):
         self.joined_usrs[uname['id']] = state
 
+    def setSelectionMode(self, mode):
+        if mode == 'Random':
+            self.selectionMode = 'Random'
+            return 0
+        elif mode == 'Chapter':
+            self.selectionMode = 'Chapter'
+            return 0
+        else:
+            return -1
+
     #dispenses the next problem (TODO: based on the dispense-mode)
     def dispense(self):
         #first fresh problem from random chapter
@@ -90,6 +104,77 @@ class ProblemManager(object):
             return -1;
         if self.cur_source == None:
             return -2;
+        if self.selectionMode == 'Random':
+            return self.dispenseRandom()
+        elif self.selectionMode == 'Chapter':
+            return self.dispenseChapter()
+
+    def dispenseChapter(self):
+        #mark previous problem as done
+        if self.cur_prob != None:
+            self.problems[self.cur_source][self.cur_chap]['problems_done'].append(self.problems[self.cur_source][self.cur_chap]['problems_not_done'][0])
+            del self.problems[self.cur_source][self.cur_chap]['problems_not_done'][0]
+            sort_nicely( self.problems[self.cur_source][self.cur_chap]['problems_done'] )
+
+        if len(self.problems[self.cur_source][self.cur_chap]['problems_not_done']) == 0:
+            return -3
+        else:
+            self.cur_prob = self.cur_source + '/' + self.cur_chap + '/' + self.problems[self.cur_source][self.cur_chap]['problems_not_done'][0]
+
+        #unready all users
+        for usr in self.joined_usrs.keys():
+            self.joined_usrs[usr] = False
+
+        self.duedate = None
+
+        return self.cur_prob
+
+    def listChapters(self):
+        if self.cur_source == None:
+            return -1
+
+        avail_chapters = []
+        for chapter in self.problems[self.cur_source].keys():
+            if len(self.problems[self.cur_source][chapter]['problems_not_done']) != 0:
+                if len(self.problems[self.cur_source][chapter]['problems_done']) != 0:
+                    avail_chapters.append(chapter + '~')
+                else:
+                    avail_chapters.append(chapter)
+            else:
+                avail_chapters.append(chapter + ' *completed* ')
+
+        sort_nicely(avail_chapters)
+
+        return (avail_chapters)
+
+    def selectChapter(self, chapt):
+        if (self.selectionMode != 'Chapter'):
+            return -3
+
+        avail_chapters = []
+        chaps = self.problems[self.cur_source].keys()
+        for chapter in chaps:
+            if len(self.problems[self.cur_source][chapter]['problems_not_done']) != 0:
+                avail_chapters.append(chapter)
+        
+        if avail_chapters == None:
+            return None
+
+        if chapt in chaps and chapt not in avail_chapters:
+            return -1
+        elif chapt not in chaps:
+            return -2
+
+        self.cur_chap = chapt
+        self.cur_prob = None
+
+        #unready all users
+        for usr in self.joined_usrs.keys():
+            self.joined_usrs[usr] = False
+
+        return 0
+
+    def dispenseRandom(self):
         avail_chapters = []
         for chapter in self.problems[self.cur_source].keys():
             if len(self.problems[self.cur_source][chapter]['problems_not_done']) != 0:
@@ -110,12 +195,13 @@ class ProblemManager(object):
         # pick first problem in that chapter
         self.cur_prob = self.cur_source + '/' + self.cur_chap + '/' + self.problems[self.cur_source][self.cur_chap]['problems_not_done'][0]
 
+        self.duedate = None
+
         #unready all users
         for usr in self.joined_usrs.keys():
             self.joined_usrs[usr] = False
 
         return self.cur_prob
-
 
     def readSources(self, wd):
         my_sources = {}
@@ -161,6 +247,25 @@ class ProblemManager(object):
         return list(self.problems.keys())
 
 
+    def setDueDate(self, chat_id, timeArr):
+        if timeArr[0] == "None":
+            self.duedate = None
+
+        incr = 0
+        secs = { 'd' : 86400, 'h' : 3600, 'm' : 60 }
+        try:
+            for substr in timeArr:
+                substr.strip()
+                incr += float(substr[0:-1]) * secs[substr[-1]]
+        except:
+            return -1
+
+        self.duedate = time.time() + incr
+
+    def getDueDate(self):
+        if self.duedate == None:
+            return "No due date set!"
+        return datetime.datetime.fromtimestamp(self.duedate).strftime('%Y-%m-%d %H:%M:%S')
 
     #def setDispenseMode(uname):
 
@@ -251,6 +356,34 @@ class ProblemBot(object):
         bot.sendMessage(chat_id, "User %s Unreadied" % args[0]['first_name'])
         self.save()
 
+    def set_selection_mode(self, chat_id, args):
+        mode = args[1]
+        res = self.chats[chat_id].setSelectionMode(mode)
+        if res==-1:
+            bot.sendMessage(chat_id, "Error : %s is not a valid mode" % mode)
+        else:
+            bot.sendMessage(chat_id, "Selection mode - %s - set" % mode)
+
+    def set_chapter(self, chat_id, args):
+        chapter = args[1]
+        res = self.chats[chat_id].selectChapter(chapter)
+        if res==-1:
+            bot.sendMessage(chat_id, "Error : -  %s - already completed" % chapter)
+        elif res == -2:
+            bot.sendMessage(chat_id, "Error : - %s - is not a chapter!" % chapter)
+        elif res == -3:
+            bot.sendMessage(chat_id, "Wrong Selection Mode! - current mode : %s" % self.chats[chat_id].selectionMode)
+        elif res == 0:
+            bot.sendMessage(chat_id, "%s selected!" % chapter)
+
+    def list_chapters(self, chat_id, args):
+        res = self.chats[chat_id].listChapters()
+        if res == -1:
+            bot.sendMessage(chat_id, "No Source Selected!")
+        else:
+            bot.sendMessage(chat_id, '\n   * ' + '\n * '.join(res))
+        
+
     def select_source(self, chat_id, args):
         if self.chats[chat_id].selectSource(args[1]):
             bot.sendMessage(chat_id, "Source Selected!")
@@ -265,9 +398,27 @@ class ProblemBot(object):
         self.save()
 
 
+    def set_due_date(self, chat_id, args):
+        res = self.chats[chat_id].setDueDate(chat_id, args[1:])
+        if ( res == -1 ):
+            bot.sendMessage(chat_id, "Due Date Format Incorrect! Use something like: 2d 12h 34m")
+        else:
+            date_fmtd = self.chats[chat_id].getDueDate()
+            bot.sendMessage(chat_id, "Due date set at %s" % date_fmtd)
+
+    def get_due_date(self, chat_id, args):
+        duedate = self.chats[chat_id].getDueDate()
+        bot.sendMessage(chat_id, duedate)
+
+    #def stats(self, chat_id, args):
+        #self.chats[chat_id] = problemmanager()
+        #self.save()
+
+
     def start(self, chat_id, args):
         self.chats[chat_id] = ProblemManager()
         self.save()
+
         
     def help(self, chat_id, args):
         helpstr = "A bot for sharpening your problem skills!\nList of Commands:\n/join : joins pool of problem-solving participants. \n/list_sources : show available problem pools\n/select_source : choose a source to draw problems from. \n/give_problem : Dispense a problem from a source. By default this picks the easiest available problem in a random chapter.\n/ready : signals that you have completed the problem and are ready to move on.\n/unready : Unreadies yourself in case you do not want to move on yet.\n/restate_problem : restates current problem\n/leave : leave pool of problem-solving participants."
@@ -295,10 +446,10 @@ def handle(msg):
     args      = split_msg[1:]
     args.insert(0,fromusr)
 
-    #try:
-    getattr(PB, method)(chat_id, args)
-    #except:
-        #bot.sendMessage(chat_id, "Invalid Command")
+    try:
+        getattr(PB, method)(chat_id, args)
+    except:
+        bot.sendMessage(chat_id, "Invalid Command")
 
 
 
@@ -308,3 +459,4 @@ bot = telepot.Bot(mykey)
 
 print("i'm listening yo")
 bot.message_loop(handle, run_forever=True)
+
